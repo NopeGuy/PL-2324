@@ -55,11 +55,11 @@ tokens = (
 'ELSE',
 'DO',
 'LOOP',
-'SWAP',
-'DUP',
-'OVER',
-'ROT',
-'DROP',
+'SWAP', #TODO:
+'DUP', #TODO:
+'OVER', #TODO:
+'ROT', #TODO:
+'DROP', #TODO:
 'CHARACTER' # Representa um caracter apenas
 ) #colocar vírgula no fim de cada token!
 
@@ -241,7 +241,6 @@ lexer = lex.lex(#debug=True
 
 forth = ''' 3 5 < IF ." Hello " ELSE ." goodbye " THEN'''
 
-fort = ''''''
 
 lexer.input(forth)
 
