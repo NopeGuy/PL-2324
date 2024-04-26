@@ -1,25 +1,22 @@
 import ply.lex as lex
+import ply.yacc as yacc
 
 #NOTAS IMPORTANTES
-#   NENHUMA função deve ser incluida no 'commentState', logo quando for adicionado um novo estado
-#       poderá ser necessário adicioná-lo a todas as outras funções
 #   TODO -> Não verificado / Dúvida
 #   BUG -> bug
 #   TODO: Por fazer
 
 #Lista de BUG's
-#Quando adicionado um '\n' dentro dos argumentos de uma função dá erro
-#Funções CHAR, SPACES e EMIT n estão a funcionar devido aos espaços, provavelmente deverão ser modificadas para n receber argumentos e ser tratado no yacc
+#BUG na p_str_prints
 
 #Estados possíveis 
 states = (
     #TODO Acho q functionDefState será inclusiva, uma vez que funções, darão para chamar outras dentro
     ('functionDefState','inclusive'), # Definição lógica da função
-    ('commentState','exclusive'), # Comentário normal '\'
-    ('functionArgState','exclusive'), # Argumentos de funções (input -- output) -> : FUN ( |o que está aqui dentro| ) logica ;
+    ('funInpState','exclusive'), # Declaração de input de funções
+    ('funOutState','exclusive'), # Declaração de output de funções
+    ('conditionalState','inclusive'), # Inicia com IF
 ) #colocar vírgula no fim de cada tuplo!
-
-literals = [] # TODO Ver que chars serão iguais tanto em forth como na VM
 
 #Tokens possíveis
 tokens = (
@@ -29,14 +26,15 @@ tokens = (
 'MUL',
 'DIV',
 'MOD',
-'SHORTADD',
-'SHORTSUB',
-'SHORTMUL',
-'SHORTDIV',
-'COMMENTSTART', # Inicio de comentário
-'COMMENT', #Tudo que for com a tipo comment será escrito como está
+'EQUALS',
+'DIFF',
+'GREQUAL', # >=
+'LESEQUAL', # <=
+'LESSER', # <
+'GREATER', # >
+'COMMENT', # \ comentario
+'COMMENT2', # ( comentario )
 'FUNCTIONSTART', # :
-'NEWLINE', # \n (para commentState apenas)
 'FUNCTIONEND', # ;
 'FUNIN', # ( |a b| -- ... )
 'FUNOUT', # ( ... -- |out1 out2| )
@@ -50,35 +48,48 @@ tokens = (
 'KEY', 
 'SPACES', 
 'SPACE', 
-'CHAR', 
+'CHAR', # Função FORTH 
 'CR',
-) #colocar vírgula no fim de cada tuplo!
+'IF',
+'THEN',
+'ELSE',
+'DO',
+'LOOP',
+'SWAP',
+'DUP',
+'OVER',
+'ROT',
+'DROP',
+'CHARACTER' # Representa um caracter apenas
+) #colocar vírgula no fim de cada token!
 
-#COMENTARIOS (Deverá permanecer no topo)
+#COMENTARIOS
 
-#Ignorar comentários através de função, no caso de haver regex mais especificos que anulem
-def t_INITIAL_functionDefState_COMMENTSTART(t):  #TODO Verificar estados
-    r'\\ '
-    if(t.lexer.current_state()!='commentState'):
-        t.lexer.push_state('commentState')
-        print("Entered commentState")
-    return t
-#Alternativa ao t_ANY_COMMENT # t_ANY_ignore_COMMENT = r'\\.*' 
+def t_ANY_COMMENT(t):
+    r'\\ .+\n'
 
-def t_commentState_COMMENT(t):
-    r'[^\n]+'
-    return t
-
-def t_commentState_NEWLINE(t):
-    r'\n'
-    t.lexer.pop_state()
-    print("Ended commentState")
-
-def t_commentState_error(t):
-    print('Illegal comment character: ',t.value[0],' Pos: ',t.lexpos)
-    t.lexer.skip(1)
+def t_ANY_COMMENT2(t):
+    r'\( .+ \)'
 
 #FIM COMENTARIOS
+
+#CONDICIONAIS
+
+def t_INITIAL_IF(t):
+    r'IF\b'
+    t.lexer.push_state('conditionalState')
+    return t
+
+def t_INITIAL_conditionalState_ELSE(t):
+    r'ELSE\b'
+    return t
+    
+def t_INITIAL_conditionalState_THEN(t):
+    r'THEN\b'
+    t.lexer.pop_state()
+    return t
+
+#FIM CONDICIONAIS
 
 #FUNCOES
 
@@ -87,165 +98,294 @@ def t_FUNCTIONSTART(t):
     t.lexer.push_state('functionDefState')
     return t
 
-def t_functionDefState_FUNCTIONEND(t):
+def t_FUNCTIONEND(t):
     r';(?!.*;)'
     t.lexer.pop_state()
     return t
 
 ##ARGUMENTOS DE FUNCOES
 
-def t_functionDefState_LPAREN(t):
+def t_LPAREN(t):
     r'\( '
-    t.lexer.push_state('functionArgState')
-    print("Entered functionArgState")
+    t.lexer.push_state('funInpState')
+    print("Entered funInpState")
  
-def t_functionArgState_RPAREN(t):
+def t_funOutState_RPAREN(t):
     r' \)'
     t.lexer.pop_state()
-    print("Exited functionArgState") 
+    print("Exited funOutState")
 
-def t_functionArgState_ARGSEP(t):
-    r'--'
+def t_funInpState_ARGSEP(t):
+    r' -- '
+    t.lexer.pop_state()
+    t.lexer.push_state('funOutState')
+    print("Entered funOutState")
+
+def t_funInpState_FUNIN(t):
+    r'[^- \n]+'
     return t
 
-def t_functionArgState_FUNIN(t):
-    r'[^- ]+(?=.+--)'
-    return t
-
-def t_functionArgState_FUNOUT(t):
-    r'[^ )]+(?=.+\))'
+def t_funOutState_FUNOUT(t):
+    r'[^ \)\n]+'
     return t
 
 
 ##FIM ARGUMENTOS DE FUNCOES
 
-#TODO: Colocar aqui as condicionais
 
+# LOW SPEFICIFICATIONS
 
-#FIM FUNCOES
-
-#Abreviação Aritmética 
-def t_INITIAL_functionDefState_SHORTADD(t):
-    r'\d+[+]'
-    t.value = int(t.value[:-1])
+def t_INITIAL_conditionalState_PRINTDELIM(t): 
+    r'\."\s[^"]+\s"'
+    t.value = t.value[3:-2]
     return t
 
-def t_INITIAL_functionDefState_SHORTSUB(t):
-    r'\d+[-]'
-    t.value = int(t.value[:-1])
-    return t
-
-def t_INITIAL_functionDefState_SHORTMUL(t):
-    r'\d+[*]'
-    t.value = int(t.value[:-1])
-    return t
-
-def t_INITIAL_functionDefState_SHORTDIV(t):
-    r'\d+[\\]'
-    t.value = int(t.value[:-1])
-    return t
-#FIM Abreviação Aritmética
-
-
-# LOW SPEFICIFICATION (Colocar aqui as funções menos específicas)
-#TODO: Falta avaliar a ordem destas funções
-
-def t_INITIAL_functionDefState_PRINTDELIM(t): 
-    r'\.".+"'
-    t.value = t.value[2:-1]                       
-    return t
-
-def t_INITIAL_functionDefState_POPPRINT(t): 
+def t_INITIAL_conditionalState_POPPRINT(t): 
     r'\.'                           
     return t
 
-def t_INITIAL_functionDefState_KEY(t): 
+def t_INITIAL_conditionalState_KEY(t): 
     r'KEY\b'                           
     return t
 
-def t_INITIAL_functionDefState_SPACES(t): # BUG Não está a ser reconhecido por causa do ignore de espaços (possivel de concertar utilizando mais um estado)
-    r'\d+ SPACES'
-    len=0
-    for char in t.value: # TODO Ainda n foi verificado
-        if char != ' ':
-            len+=1
-        else:
-            pass
-    t.value = int(t.value[:len])                      
+def t_INITIAL_conditionalState_SPACES(t): 
+    r'SPACES\b'
     return t
 
-def t_INITIAL_functionDefState_SPACE(t): 
+def t_INITIAL_conditionalState_SPACE(t): 
     r'SPACE\b'                           
     return t
 
-def t_INITIAL_functionDefState_CR(t):
+def t_INITIAL_conditionalState_CR(t):
     r'CR\b'
     return t
 
-def t_INITIAL_functionDefState_CHAR(t): # BUG Não está a ser reconhecido por causa do ignore de espaços (possivel de concertar utilizando mais um estado)
-    r'. CHAR'
-    t.value = t.value[-1]
-    try:
-        t.value = ord(t.value)
-        print(t.value)
-    except:
-        print("ERROR converting to ASCII. POS: ",t.lexpos)
-
-def t_INITIAL_functionDefState_EMIT(t): # BUG Não está a ser reconhecido por causa do ignore de espaços (possivel de concertar utilizando mais um estado)
-    r'. EMIT'
-    t.value = t.value[1]
+def t_INITIAL_conditionalState_CHAR(t):
+    r'CHAR\b'
     return t
 
-def t_INITIAL_functionDefState_WORD(t): # CUIDADO! Terá de ficar em último (abaixo de funcoes
-    r'[A-Z]+'                           #) de print, palavras restritas (EMIT,KEY,...) )
+def t_INITIAL_conditionalState_EMIT(t):
+    r'EMIT\b'
     return t
 
-def t_INITIAL_functionDefState_NUMBER(t):
+def t_INITIAL_conditionalState_DO(t):
+    r'DO\b'
+    return t
+
+def t_INITIAL_conditionalState_LOOP(t):
+    r'LOOP\b'
+    return t
+
+def t_INITIAL_conditionalState_DUP(t):
+    r'DUP\b'
+    return t
+
+def t_INITIAL_conditionalState_DROP(t):
+    r'DROP\b'
+    return t
+
+def t_INITIAL_conditionalState_OVER(t):
+    r'OVER\b'
+    return t
+
+def t_INITIAL_conditionalState_ROT(t):
+    r'ROT\b'
+    return t
+
+def t_INITIAL_conditionalState_NUMBER(t):
     r'\d+'
-    t.value = int(t.value)
     return t
 
-# TODO Ver se não será preciso definir funções para estes (penso que n)
-t_INITIAL_functionDefState_ADD = r'\+'
-t_INITIAL_functionDefState_SUB = r'-'
-t_INITIAL_functionDefState_MUL = r'\*'
-t_INITIAL_functionDefState_DIV = r'/'
-t_INITIAL_functionDefState_MOD = r'%'
+def t_INITIAL_conditionalState_SWAP(t):
+    r'SWAP\b'
+    return t
+
+def t_INITIAL_conditionalState_WORD(t): 
+    r'[A-Z0-9][A-Z0-9]+'                          
+    return t
+
+def t_INITIAL_conditionalState_CHARACTER(t):
+    r'[A-Z]'
+    return t
+
+
+t_INITIAL_conditionalState_ADD = r'\+'
+t_INITIAL_conditionalState_SUB = r'-'
+t_INITIAL_conditionalState_MUL = r'\*'
+t_INITIAL_conditionalState_DIV = r'/'
+t_INITIAL_conditionalState_MOD = r'%'
+t_INITIAL_conditionalState_DIFF = r'<>'
+t_INITIAL_conditionalState_GREQUAL = r'>='
+t_INITIAL_conditionalState_LESEQUAL = r'<='
+t_INITIAL_conditionalState_EQUALS = r'='
+t_INITIAL_conditionalState_LESSER = r'<'
+t_INITIAL_conditionalState_GREATER = r'>'
+
 
 # IGNORES
 
-# TODO: Adicionar ignores para todos os states
 t_ignore = ' \t\n'
-t_functionArgState_ignore = ' \t\n'
-t_functionDefState_ignore = ' \t\n'
-t_commentState_ignore = ''
+t_funInpState_funOutState_ignore = ' \t\n'
+t_conditionalState_ignore = ' \t\n'
 
 # FIM IGNORES
 
-def t_ANY_error(t): #Para já, ignoram-se \n, uma vez que penso que APENAS serão UTEIS para COMENTARIOS 
+def t_ANY_error(t):
     print('Illegal character: ',t.value[0],' Pos: ',t.lexpos)
     t.lexer.skip(1)
 
 # MAIN
 
-lexer = lex.lex(debug=True)
+lexer = lex.lex(#debug=True
+    )
 
-forth = ''' SPACE 3 530+ \ boda SPACE
-3 5 +
-: BODA \ comentario
- ( a b -- hi \ comentario
-   has ) \ comentario
- 3 KEY \ comentario 
- + ;
-: TOFU ." Yummy bean curd!" ;
-: MENU
-CR TOFU CR SPROUTS CR
-;
-MENU 5 SPACES'''
+forth = ''' 3 5 < IF ." Hello " ELSE ." goodbye " THEN'''
 
 fort = ''''''
 
 lexer.input(forth)
 
-while tok := lexer.token():
-    print(tok)
+# print results from lexer
+# while tok := lexer.token():
+#    print(tok)
+
+def p_expression_arit(p):
+    '''expression : expression term ADD
+                  | expression term SUB
+                  | expression term MUL
+                  | expression term DIV
+                  | expression term MOD'''
+    p[0] = p[1] + p[2]
+    if p[3]== '+':
+        p[0] += 'ADD\n'
+    elif p[3] == '-':
+        p[0] += 'SUB\n'
+    elif p[3] == '/':
+        p[0] += 'DIV\n'
+    elif p[3] == '*':
+        p[0] += 'MUL\n'
+    elif p[3] == '%':
+        p[0] += 'MOD\n'
+
+
+def p_condition_relOp(p):
+    '''condition : expression term LESSER
+                 | expression term GREATER
+                 | expression term DIFF
+                 | expression term GREQUAL
+                 | expression term LESEQUAL
+                 | expression term EQUALS'''
+    p[0] = p[1] + p[2]
+    if p[3] == '<':
+        p[0] += 'INF\n'
+    elif p[3] == '>':
+        p[0] += 'SUP\n'
+    elif p[3] == '<>':
+        p[0] += 'NOT\n'
+    elif p[3] == '<=':
+        p[0] += 'INFEQ\n'
+    elif p[3] == '>=':
+        p[0] += 'SUPEQ\n'
+    elif p[3] == '=':
+        p[0] += 'EQUAL\n'
+
+
+def p_expression_ifThen(p):
+    '''expression : condition IF expression THEN'''
+    false = 'l' + str(parser.labels)
+    p[0] = p[1]
+    p[0] += 'JZ ' + false + '\n' # Salto caso seja falso
+    p[0] += p[3] # Condição caso verdadeiro
+    p[0] += false + ':\n' # Salto (falso)
+
+    parser.labels+=1
+
+def p_expression_ifElseThen(p):
+    '''expression : condition IF expression ELSE expression THEN'''
+    fi = 'l' + str(parser.labels)
+    parser.labels+=1
+    els = 'l' + str(parser.labels)
+    parser.labels+=1
+    fim = 'l' + str(parser.labels)
+    p[0] = p[1]
+    p[0] += 'JZ ' + els + '\n' # Salto caso seja falso
+    p[0] += p[3] # V
+    p[0] += 'jump ' + fim + '\n' # Salto para o fim
+    p[0] += els + ':\n' # Salto F
+    p[0] += p[5] # F
+    p[0] += fim + ':\n' # fim
+    
+    parser.labels+=1
+    
+
+def p_term_num(p):
+    '''term : NUMBER'''
+    p[0] = 'pushi ' + p[1] + '\n'
+
+def p_term_char(p): #TODO N sei o que é suposto fazer com esta função
+    '''term : CHAR CHARACTER'''
+    p[0] = 'pushs "' + p[2] + '"\n'
+    p[0] += 'CHRCODE\n'
+
+def p_str_print(p): # func de output print sem argumentos
+    '''str : PRINTDELIM 
+           | CR
+           | SPACE
+           | KEY'''
+    if p[1] == 'CR':
+        p[0] = 'writeln'
+    elif p[1] == 'SPACE':
+        p[0] = 'pushs " " \n'
+    elif p[1] == 'KEY':
+        p[0] = 'read\n'
+        p[0] += 'chrcode\n'
+        p[0] += 'writei\n'
+    else: # PRINTDELIM
+        p[0] = 'pushs "' + p[1] + '"\n'
+        p[0] += 'writes \n'
+
+def p_str_prints(p): # func de output print com argumentos - BUG Mudança de term para NUMBER deu erro (possivelment utilizar tag num como intermedia entre NUMBER e term)
+    '''str : NUMBER SPACES 
+           | NUMBER EMIT'''
+    strt = 'l' + str(parser.labels) 
+    parser.labels +=1
+    fin = 'l' + str(parser.labels) 
+    parser.labels +=1
+
+
+    if p[2] == 'SPACES':
+        #loop core
+        p[0] = 'pushi ' + p[1] + '\n'
+        p[0] += strt + ':\n'
+        p[0] += 'dup 1 \npushi 0\nsup\njz ' + fin +'\n'
+        #print espaço
+        p[0] += 'pushs " "\nwrites\n'
+        #loop core 2
+        p[0] += 'pushi 1\nsub\njump ' + strt + '\n'
+        p[0] += fin + ':\n' + 'pop 1\n'
+    else: # EMIT
+        p[0] = 'pushi ' + p[1] + '\n'
+        p[0] += 'writechr\n'
+
+
+def p_expression_translate(p):
+    '''expression : term
+                  | condition
+                  | str'''
+    p[0] = p[1]
+
+
+def p_error(p):
+    print("Syntax error in input!")
+
+parser = yacc.yacc()
+
+parser.enderecos = {}
+parser.i = 0
+parser.labels = 1
+
+# print results from yacc
+res = str(parser.parse(forth, lexer=lexer,debug=True))
+
+with open('res.txt', 'w') as file:
+    file.write(res)
