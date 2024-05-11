@@ -11,7 +11,6 @@ import ply.yacc as yacc
 
 #Estados possíveis 
 states = (
-    #TODO Acho q functionDefState será inclusiva, uma vez que funções, darão para chamar outras dentro
     ('functionDefState','inclusive'), # Definição lógica da função
     ('funInpState','exclusive'), # Declaração de input de funções
     ('funOutState','exclusive'), # Declaração de output de funções
@@ -60,7 +59,6 @@ tokens = (
 'OVER', #TODO:
 'ROT', #TODO:
 'DROP', #TODO:
-'CHARACTER' # Representa um caracter apenas
 ) #colocar vírgula no fim de cada token!
 
 #COMENTARIOS
@@ -120,7 +118,6 @@ def t_funInpState_ARGSEP(t):
     t.lexer.pop_state()
     t.lexer.push_state('funOutState')
     print("Entered funOutState")
-    return t
 
 def t_funInpState_FUNIN(t):
     r'[^-\s\n]+'
@@ -202,11 +199,7 @@ def t_INITIAL_conditionalState_SWAP(t):
     return t
 
 def t_INITIAL_conditionalState_WORD(t): 
-    r'[A-Z0-9][A-Z0-9]+'                          
-    return t
-
-def t_INITIAL_conditionalState_CHARACTER(t):
-    r'[A-Z]'
+    r'[A-Z0-9]+'                          
     return t
 
 
@@ -240,7 +233,7 @@ def t_ANY_error(t):
 lexer = lex.lex(#debug=True
     )
 
-forth = ''' 3 5 < 5 >'''
+forth = ''' : W ( ab cd -- ) 3 5 + 5 - ;'''
 
 
 lexer.input(forth)
@@ -260,28 +253,44 @@ precedence = (
 ) # Virgulas no fim de cada tuplo
 
 def p_exp_translate(p):
-    '''exp : numExp
-           | cond'''
+    '''exp : numExp'''
     p[0] = p[1]
 
-#TODO Mais 3 versões (sem input/output, sem input apenas, sem output apenas)
 #TODO mudar exp do corpo da func
-def p_exp_funcInOut(p):
-    '''exp :  exp FUNCTIONSTART WORD LPAREN inputList ARGSEP outputList RPAREN exp FUNCTIONEND'''
-    #Adicionar ao dicionario
-    l_func = 'l' + str(parser.label) #label da func
-    parser.label+=1
-    nome = p[3]
+def p_exp_funcExp(p):
+    '''exp : funNameDef arguments exp FUNCTIONEND'''
+    p[0] = p[1] + p[3]
+    p[0] += 'return\n'
+
+def p_numExp_funcNumExp(p):
+    '''exp : funNameDef arguments numExp FUNCTIONEND'''
+    p[0] = p[1] + p[3]
+    p[0] += 'return\n'
+
+def p_funNameDef(p):
+    '''funNameDef : FUNCTIONSTART WORD'''
+    
+    if p[1] in parser.enderecos:
+        print('Function name: ' + p[2] + ' already exists.')
+        raise SyntaxError
+        
+    l_func = 'l' + str(parser.labels) #label da fun
+    parser.labels+=1
+    nome = p[2]
     parser.func = nome
-    data = (nome,l_func,0)
-    parser.enderecos.append(data)
+    data = ({nome: (l_func, 0)})
+    parser.enderecos.update(data)
+    print(parser.enderecos)
+    p[0] = l_func + ':\n'
 
-    # Definir com código da VM TODO
-    p[0] = p[1]
-    p[0] += l_func + ':\n'
-    p[0] += p[9] # corpo da func
-    p[0] += p[7] # pushg do output
-
+def p_arguments(p):
+    '''arguments : LPAREN inputList outputList RPAREN
+                 | LPAREN outputList RPAREN
+                 | LPAREN inputList RPAREN
+                 | LPAREN RPAREN
+                 | empty''' # TODO Verificar se funciona com isto
+    pass
+            
 
 def p_inputList(p):
     '''inputList : FUNIN
@@ -289,63 +298,58 @@ def p_inputList(p):
     for key,label,num in parser.enderecos:
         if key == parser.func:
             num+=1
-
-    if len(p) == 2:
-        p[0] = p[1] + p[2]
-    else:
-        p[0] = p[1]
     
 
 def p_outputList(p):
     '''outputList : FUNOUT
                   | outputList FUNOUT'''
-    # declarar variaveis globais (pushg) TODO
-    parser.i+=1
+    pass
 
-#TODO Definição de WORD com verificação do numero de argumentos
 
 def p_numExp_arit(p):
-    '''numExp : numExp num ADD
-              | numExp num SUB
-              | numExp num MUL
-              | numExp num DIV
-              | numExp num MOD'''
-    p[0] = p[1] + p[2]
-    if p[3]== '+':
+    '''numExp : 2numExp ADD
+              | 2numExp SUB
+              | 2numExp MUL
+              | 2numExp DIV
+              | 2numExp MOD'''
+    
+    p[0] = p[1]
+    if p[2]== '+':
         p[0] += 'ADD\n'
-    elif p[3] == '-':
+    elif p[2] == '-':
         p[0] += 'SUB\n'
-    elif p[3] == '/':
+    elif p[2] == '/':
         p[0] += 'DIV\n'
-    elif p[3] == '*':
+    elif p[2] == '*':
         p[0] += 'MUL\n'
-    elif p[3] == '%':
+    elif p[2] == '%':
         p[0] += 'MOD\n'
 
 
 def p_cond_relOp(p):
-    '''cond : numExp num LESSER
-            | numExp num GREATER
-            | numExp num DIFF
-            | numExp num GREQUAL
-            | numExp num LESEQUAL
-            | numExp num EQUALS'''
-    p[0] = p[1] + p[2]
-    if p[3] == '<':
+    '''cond : 2numExp LESSER
+            | 2numExp GREATER
+            | 2numExp DIFF
+            | 2numExp GREQUAL
+            | 2numExp LESEQUAL
+            | 2numExp EQUALS'''
+    
+    p[0] = p[1]
+    if p[2] == '<':
         p[0] += 'INF\n'
-    elif p[3] == '>':
+    elif p[2] == '>':
         p[0] += 'SUP\n'
-    elif p[3] == '<>':
+    elif p[2] == '<>':
         p[0] += 'NOT\n'
-    elif p[3] == '<=':
+    elif p[2] == '<=':
         p[0] += 'INFEQ\n'
-    elif p[3] == '>=':
+    elif p[2] == '>=':
         p[0] += 'SUPEQ\n'
-    elif p[3] == '=':
+    elif p[2] == '=':
         p[0] += 'EQUAL\n'
 
 
-def p_exp_ifThen(p): 
+def p_exp_ifThen(p):
     '''exp : cond IF exp THEN'''
     false = 'l' + str(parser.labels)
     p[0] = p[1]
@@ -374,15 +378,21 @@ def p_exp_ifElseThen(p):
 
 
 def p_num_char(p):
-    '''num : CHAR CHARACTER'''
+    '''num : CHAR WORD'''
+
+    if len(p[2]) > 1:
+        print("SyntaxError - CHAR applied to more than one character.")
+        raise SyntaxError
+
     p[0] = 'pushs "' + p[2] + '"\n'
     p[0] += 'CHRCODE\n'
 
-def p_numExp_print(p): # func de output print sem argumentos
-    '''numExp : numExp PRINTDELIM
-              | numExp CR
-              | numExp SPACE
-              | numExp KEY'''
+
+def p_exp_printOnly(p):
+    '''exp : PRINTDELIM
+           | CR
+           | SPACE
+           | KEY'''
     if p[1] == 'CR':
         p[0] = 'writeln'
     elif p[1] == 'SPACE':
@@ -395,14 +405,32 @@ def p_numExp_print(p): # func de output print sem argumentos
         p[0] = 'pushs "' + p[1] + '"\n'
         p[0] += 'writes \n'
 
-def p_numExp_prints(p): # func de output print com argumentos - BUG Mudança de term para NUMBER deu erro (possivelment utilizar tag num como intermedia entre NUMBER e term)
-    '''numExp : numExp num SPACES 
-              | numExp num EMIT'''
+def p_exp_print(p): # func de output print sem argumentos
+    '''exp : exp PRINTDELIM
+           | exp CR
+           | exp SPACE
+           | exp KEY'''
+    if p[1] == 'CR':
+        p[0] = 'writeln'
+    elif p[1] == 'SPACE':
+        p[0] = 'pushs " " \n'
+    elif p[1] == 'KEY':
+        p[0] = 'read\n'
+        p[0] += 'chrcode\n'
+        p[0] += 'writei\n'
+    else: # PRINTDELIM
+        p[0] = 'pushs "' + p[1] + '"\n'
+        p[0] += 'writes \n'
+
+def p_numExp_prints(p):
+    '''exp : numExp SPACES 
+           | 2numExp SPACES
+           | numExp EMIT
+           | 2numExp EMIT'''
     strt = 'l' + str(parser.labels) 
     parser.labels +=1
     fin = 'l' + str(parser.labels) 
     parser.labels +=1
-
 
     if p[2] == 'SPACES':
         #loop core 1
@@ -416,25 +444,40 @@ def p_numExp_prints(p): # func de output print com argumentos - BUG Mudança de 
     else: # EMIT
         p[0] += 'writechr\n'
 
-def p_numExp_loop(p):
-    '''numExp : numExp num DO exp LOOP'''
+def p_exp_loop2(p):
+    '''exp : 2numExp DO exp LOOP'''
+
     strt = 'l' + str(parser.labels) 
     parser.labels +=1
     fin = 'l' + str(parser.labels) 
     parser.labels +=1
 
-    # Calculo do nº de ciclos 
+    counter = str(parser.g)
+    parser.g += 1 
+    limit = str(parser.g)
+    parser.g += 1
+
     p[0] = p[1]
-    p[0] += 'pushi ' + p[2] + '\n'
-    p[0] += 'sub\n'
-    #loop core 1
+
+    p[0] += 'storeg ' + counter + ' \n'
+    p[0] += 'storeg ' + limit + ' \n'
+
     p[0] += strt + ':\n'
-    p[0] += 'dup 1\npushi 0\nsup\njz ' + fin + '\n'
-    #código do loop
-    p[0] += p[4]
-    #loop core 2
-    p[0] += 'pushi 1\nsub\njump ' + strt + '\n'
-    p[0] += fin + ':\n' + 'pop 1\n'
+    p[0] += p[3]
+
+    p[0] += 'pushg ' + counter + '\n'
+    p[0] += 'pushi 1\n'
+    p[0] += 'sub\n'
+    p[0] += 'storeg ' + counter + '\n'
+
+    p[0] += 'pushg ' + counter + '\n'
+    p[0] += 'pushg ' + limit + '\n'
+    p[0] += 'sub\n'
+    p[0] += 'jz ' + fin + '\n'
+    p[0] += 'jump ' + strt + '\n'
+    p[0] += fin + ':\n'
+    p[0] += 'pop 1\n'
+
 
 
 def p_num_number(p):
@@ -442,49 +485,40 @@ def p_num_number(p):
     p[0] = 'pushi ' + p[1] + '\n'
 
 
-def p_numExp_translate(p):
-    '''numExp : num'''
-    p[0] = p[1]
+def p_2numExp(p):
+    '''2numExp : numExp num'''
+    p[0] = p[1] + p[2]
 
+
+
+def p_numExp_nums(p):
+    '''numExp : num
+              | cond
+              | exp num'''
+    if len(p) == 2:
+        p[0] = p[1]
+    else:
+        p[0] = p[1] + p[2]
+
+def p_exp_function(p): # TODO Pode dar erro (ambiguidade)
+    '''exp : exp WORD
+           | WORD'''
+    if p[1] not in parser.enderecos:
+        print("Syntax Error - Function '" + p[1] + "' not defined.")
+        raise SyntaxError
+    
+    if len(p) == 3:
+        p[0] = p[1]
+        p[0] += 'call ' + str(parser.enderecos[p[2]][0]) + '\n' #TODO Verificar se está a buscar a label corretamente
+    else:
+        p[0] = 'call ' + str(parser.enderecos[p[2]][0]) + '\n' #TODO Verificar
 
 def p_empty(p):
     'empty :'
     pass
 
 # Error Handling
-
-def p_numExp_arit_error(p):
-    '''numExp : numExp error ADD
-              | numExp error SUB
-              | numExp error MUL
-              | numExp error DIV
-              | numExp error MOD'''
-    print("Syntax error in arithmetric expression. Missing number for operation.")
-    raise SyntaxError
-
-def p_numExp_relOp_error(p):
-    '''numExp : numExp error LESSER
-              | numExp error GREATER
-              | numExp error DIFF
-              | numExp error GREQUAL
-              | numExp error EQUALS'''
-    print("Syntax error in logical expression. Missing number for operation.")
-    raise SyntaxError
-
-def p_exp_ifThen_error(p):
-    '''exp : cond IF error THEN
-           | error IF exp THEN
-           | numExp IF exp THEN
-           | exp IF exp THEN'''
-    print('Syntax error in if-then conditional expression.')
-    raise SyntaxError
-
-def p_exp_ifElseThen_error(p):
-    '''exp : cond IF exp error
-           | cond IF exp ELSE error
-           | cond IF exp ELSE exp error'''
-    print('Syntax error in if-then-else conditional expression.')
-    raise SyntaxError
+#TODO Adicionar erros para arit e cond
 
 def p_error(p):
     print("Syntax error in input!")
@@ -493,8 +527,8 @@ def p_error(p):
 parser = yacc.yacc()
 
 parser.enderecos = {} # key: WORD; label, número argumentos 
-parser.i = 0 #Número de inputs disponiveis na stack
 parser.labels = 1
+parser.g = 0
 parser.func = ""
 
 # print results from yacc
