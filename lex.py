@@ -54,11 +54,10 @@ tokens = (
 'ELSE',
 'DO',
 'LOOP',
-'SWAP', #TODO:
-'DUP', #TODO:
-'OVER', #TODO:
-'ROT', #TODO:
-'DROP', #TODO:
+'SWAP',
+'2SWAP', #TODO:
+'2DUP',
+'DUP',
 ) #colocar vírgula no fim de cada token!
 
 #COMENTARIOS
@@ -74,16 +73,16 @@ def t_ANY_COMMENT2(t):
 #CONDICIONAIS
 
 def t_INITIAL_IF(t):
-    r'IF\b'
+    r'[Ii][fF]\b'
     t.lexer.push_state('conditionalState')
     return t
 
 def t_INITIAL_conditionalState_ELSE(t):
-    r'ELSE\b'
+    r'[Ee][Ll][sS][eE]\b'
     return t
     
 def t_INITIAL_conditionalState_THEN(t):
-    r'THEN\b'
+    r'[Tt][Hh][Ee][nN]\b'
     t.lexer.pop_state()
     return t
 
@@ -101,9 +100,9 @@ def t_FUNCTIONEND(t):
     t.lexer.pop_state()
     return t
 
-##ARGUMENTOS DE FUNCOES
+##COMENTARIO DE FUNCOES
 
-def t_LPAREN(t):
+def t_functionDefState_LPAREN(t):
     r'\(\s'
     t.lexer.push_state('funInpState')
     print("Entered funInpState")
@@ -121,20 +120,18 @@ def t_funInpState_ARGSEP(t):
 
 def t_funInpState_FUNIN(t):
     r'[^-\s\n]+'
-    return t
+
 
 def t_funOutState_FUNOUT(t):
     r'[^\s\)\n]+'
-    return t
+
+##FIM COMENTARIO DE FUNCOES
 
 
-##FIM ARGUMENTOS DE FUNCOES
-
-
-# LOW SPEFICIFICATIONS
+# FUNCOES PRE-DEFINIDAS
 
 def t_INITIAL_conditionalState_PRINTDELIM(t): 
-    r'\."\s[^"]+\s"'
+    r'\."\s[^"]+"'
     t.value = t.value[3:-2]
     return t
 
@@ -143,63 +140,71 @@ def t_INITIAL_conditionalState_POPPRINT(t):
     return t
 
 def t_INITIAL_conditionalState_KEY(t): 
-    r'KEY\b'                           
+    r'[Kk][eE][yY]\b'                           
     return t
 
 def t_INITIAL_conditionalState_SPACES(t): 
-    r'SPACES\b'
+    r'[sS][pP][aA][cC][eE][sS]\b'
     return t
 
 def t_INITIAL_conditionalState_SPACE(t): 
-    r'SPACE\b'                           
+    r'[sS][pP][aA][cC][eE]\b'                           
     return t
 
 def t_INITIAL_conditionalState_CR(t):
-    r'CR\b'
+    r'[cC][rR]\b'
     return t
 
 def t_INITIAL_conditionalState_CHAR(t):
-    r'CHAR\b'
+    r'[cC][hH][aA][rR]\b'
     return t
 
 def t_INITIAL_conditionalState_EMIT(t):
-    r'EMIT\b'
+    r'[eE][mM][iI][tT]\b'
     return t
 
 def t_INITIAL_conditionalState_DO(t):
-    r'DO\b'
+    r'[dD][oO]\b'
     return t
 
 def t_INITIAL_conditionalState_LOOP(t):
-    r'LOOP\b'
+    r'[lL][oO][oO][pP]\b'
+    return t
+
+def t_INITIAL_conditionalState_2DUP(t):
+    r'2[dD][uU][pP]\b'
     return t
 
 def t_INITIAL_conditionalState_DUP(t):
-    r'DUP\b'
+    r'[dD][uU][pP]\b'
     return t
 
 def t_INITIAL_conditionalState_DROP(t):
-    r'DROP\b'
+    r'[dD][rR][oO][pP]\b'
     return t
 
 def t_INITIAL_conditionalState_OVER(t):
-    r'OVER\b'
+    r'[oO][vV][eE][rR]\b'
     return t
 
 def t_INITIAL_conditionalState_ROT(t):
-    r'ROT\b'
+    r'[rR][oO][tT]\b'
     return t
 
 def t_INITIAL_conditionalState_NUMBER(t):
     r'\d+'
     return t
 
+def t_INITIAL_conditionalState_2SWAP(t):
+    r'2[sS][wW][aA][pP]\b'
+    return t
+
 def t_INITIAL_conditionalState_SWAP(t):
-    r'SWAP\b'
+    r'[sS][wW][aA][pP]\b'
     return t
 
 def t_INITIAL_conditionalState_WORD(t): 
-    r'[A-Z0-9]+'                          
+    r'[A-Za-z0-9]+'                          
     return t
 
 
@@ -233,7 +238,9 @@ def t_ANY_error(t):
 lexer = lex.lex(#debug=True
     )
 
-forth = ''' : W ( ab cd -- ) 3 5 + 5 - ;'''
+forth = ''': maior2 > if swap then ;
+: maior3 maior2 maior2 . ;
+2 11 3 maior3'''
 
 
 lexer.input(forth)
@@ -243,142 +250,175 @@ lexer.input(forth)
 #    print(tok)
 
 precedence = (
+    ('left','WORD'),
+    ('left','FUNCTIONEND'),
+    ('right','CHAR'),
     ('left','SPACES','EMIT'),
     ('left', 'EQUALS', 'DIFF', 'GREQUAL', 'LESEQUAL', 'LESSER', 'GREATER'),
     ('left', 'ADD', 'SUB', 'MUL', 'DIV', 'MOD'),
     ('left', 'THEN'),
     ('right', 'ELSE'),
-    ('right', 'IF'),
+    ('right', 'IF'),   
+)
+
+def p_exps(p):
+    '''exps : exps exp'''
+    p[0] = p[1] + p[2]
+
+def p_exps_empty(p):
+    '''exps : empty'''
+    p[0] = ""
     
-) # Virgulas no fim de cada tuplo
 
-def p_exp_translate(p):
-    '''exp : numExp'''
-    p[0] = p[1]
-
-#TODO mudar exp do corpo da func
-def p_exp_funcExp(p):
-    '''exp : funNameDef arguments exp FUNCTIONEND'''
-    p[0] = p[1] + p[3]
-    p[0] += 'return\n'
-
-def p_numExp_funcNumExp(p):
-    '''exp : funNameDef arguments numExp FUNCTIONEND'''
-    p[0] = p[1] + p[3]
-    p[0] += 'return\n'
-
-def p_funNameDef(p):
-    '''funNameDef : FUNCTIONSTART WORD'''
-    
-    if p[1] in parser.enderecos:
-        print('Function name: ' + p[2] + ' already exists.')
+def p_exp_word(p):
+    '''exp : WORD'''
+    p[0] = ""
+    if p[1] not in parser.enderecos and p[1] != parser.func:
+        print("Function '" + p[1] + "' not defined.")
         raise SyntaxError
-        
-    l_func = 'l' + str(parser.labels) #label da fun
-    parser.labels+=1
-    nome = p[2]
-    parser.func = nome
-    data = ({nome: (l_func, 0)})
+    
+    funInfo = parser.enderecos.get(p[1]) # Encontra a função no dicionário
+
+    if parser.funDef == False:
+        p[0] = funInfo['body'] # Adicionar corpo da função ao código
+        parser.i += funInfo['saldo'] # Adiciona o saldo da função ao contador
+    else:
+        p[0] = funInfo['body']
+        funAdef = parser.enderecos.get(parser.func)
+        funAdef['saldo'] += funInfo['saldo']
+
+
+def p_funStarted_WORD(p):
+    '''funStarted : FUNCTIONSTART WORD'''
+    p[0] = ""
+    if p[2] in parser.enderecos:
+        print('Function ' + p[2] + ' already exists.')
+        raise SyntaxError
+    parser.funDef = True
+    parser.func = p[2]
+    data = ({p[2]: {'body':"",'saldo':0}})
     parser.enderecos.update(data)
-    print(parser.enderecos)
-    p[0] = l_func + ':\n'
-
-def p_arguments(p):
-    '''arguments : LPAREN inputList outputList RPAREN
-                 | LPAREN outputList RPAREN
-                 | LPAREN inputList RPAREN
-                 | LPAREN RPAREN
-                 | empty''' # TODO Verificar se funciona com isto
-    pass
-            
-
-def p_inputList(p):
-    '''inputList : FUNIN
-                 | inputList FUNIN'''
-    for key,label,num in parser.enderecos:
-        if key == parser.func:
-            num+=1
     
 
-def p_outputList(p):
-    '''outputList : FUNOUT
-                  | outputList FUNOUT'''
-    pass
+def p_functionBody(p):
+    '''functionBody : exps FUNCTIONEND'''
+    p[0] = ""
+    nome = parser.func
+    bodyFun = p[1]
 
+    parser.enderecos[nome]['body'] = bodyFun
+    parser.enderecos[nome]['saldo'] = parser.funCount
 
-def p_numExp_arit(p):
-    '''numExp : 2numExp ADD
-              | 2numExp SUB
-              | 2numExp MUL
-              | 2numExp DIV
-              | 2numExp MOD'''
+    print(parser.enderecos) #TODO debug
+
+    #Reiniciar Variáveis globais
+    parser.funCount = 0
+    parser.func = ""
+    parser.funDef = False
     
-    p[0] = p[1]
-    if p[2]== '+':
-        p[0] += 'ADD\n'
-    elif p[2] == '-':
-        p[0] += 'SUB\n'
-    elif p[2] == '/':
-        p[0] += 'DIV\n'
-    elif p[2] == '*':
-        p[0] += 'MUL\n'
-    elif p[2] == '%':
-        p[0] += 'MOD\n'
 
+def p_exp_funDefined(p):
+    '''exp : funStarted functionBody'''
+    p[0] = ""
 
-def p_cond_relOp(p):
-    '''cond : 2numExp LESSER
-            | 2numExp GREATER
-            | 2numExp DIFF
-            | 2numExp GREQUAL
-            | 2numExp LESEQUAL
-            | 2numExp EQUALS'''
     
-    p[0] = p[1]
-    if p[2] == '<':
-        p[0] += 'INF\n'
-    elif p[2] == '>':
-        p[0] += 'SUP\n'
-    elif p[2] == '<>':
-        p[0] += 'NOT\n'
-    elif p[2] == '<=':
-        p[0] += 'INFEQ\n'
-    elif p[2] == '>=':
-        p[0] += 'SUPEQ\n'
-    elif p[2] == '=':
-        p[0] += 'EQUAL\n'
+def p_exp_aritOnly(p):
+    '''exp : ADD
+           | SUB
+           | MUL
+           | DIV
+           | MOD'''
 
+    if parser.funDef == False:
+        if parser.i < 2:
+            print("Arithmetic Error: Not enough values on stack!")
+        parser.i -= 1
+    else:
+        parser.funCount -=1
+
+    if p[1] == '+':
+        p[0] = 'ADD\n'
+    elif p[1] == '-':
+        p[0] = 'SUB\n'
+    elif p[1] == '/':
+        p[0] = 'DIV\n'
+    elif p[1] == '*':
+        p[0] = 'MUL\n'
+    elif p[1] == '%':
+        p[0] = 'MOD\n'
+
+def p_exp_relOpOnly(p):
+    '''exp : LESSER
+            | GREATER
+            | DIFF
+            | GREQUAL
+            | LESEQUAL
+            | EQUALS'''
+
+    if parser.funDef == False:
+        if parser.i < 2:
+            print("Logical Error: Not enough values on stack!")
+            raise SyntaxError
+        parser.i -= 1
+    else:
+        parser.funCount -=1
+
+    if p[1] == '<':
+        p[0] = 'INF\n'
+    elif p[1] == '>':
+        p[0] = 'SUP\n'
+    elif p[1] == '<>':
+        p[0] = 'NOT\n'
+    elif p[1] == '<=':
+        p[0] = 'INFEQ\n'
+    elif p[1] == '>=':
+        p[0] = 'SUPEQ\n'
+    elif p[1] == '=':
+        p[0] = 'EQUAL\n'
 
 def p_exp_ifThen(p):
-    '''exp : cond IF exp THEN'''
-    false = 'l' + str(parser.labels)
-    p[0] = p[1]
-    p[0] += 'JZ ' + false + '\n' # Salto caso seja falso
-    p[0] += p[3] # Condição caso verdadeiro
-    p[0] += false + ':\n' # Salto (falso)
+    '''exp : IF exps THEN'''
+    if parser.funDef == False:
+        if parser.i < 1:
+            print("Conditional Error: Not enough values on stack!")
+            raise SyntaxError
+        parser.i -= 1
+    else:
+        parser.funCount -= 1
 
+    false = 'l' + str(parser.labels)
+    p[0] = 'JZ ' + false + '\n' # Salto caso seja falso
+    p[0] += p[2] # Condição caso verdadeiro
+    p[0] += false + ':\n' # Salto (falso)
     parser.labels+=1
 
-def p_exp_ifElseThen(p):
-    '''exp : cond IF exp ELSE exp THEN'''
+def p_exp_ifElseThenOnly(p):
+    '''exp : IF exps ELSE exps THEN'''
+    if parser.funDef == False:
+        if parser.i < 1:
+            print("Conditional Error: Not enough values on stack!")
+            raise SyntaxError
+        parser.i -= 1
+    else:
+        parser.funCount -= 1
+    
     fi = 'l' + str(parser.labels)
     parser.labels+=1
     els = 'l' + str(parser.labels)
     parser.labels+=1
     fim = 'l' + str(parser.labels)
-    p[0] = p[1]
-    p[0] += 'JZ ' + els + '\n' # Salto caso seja falso
-    p[0] += p[3] # V
+    p[0] = 'JZ ' + els + '\n' # Salto caso seja falso
+    p[0] += p[2] # V
     p[0] += 'jump ' + fim + '\n' # Salto para o fim
     p[0] += els + ':\n' # Salto F
-    p[0] += p[5] # F
+    p[0] += p[4] # F
     p[0] += fim + ':\n' # fim
     
     parser.labels+=1
 
 
-def p_num_char(p):
-    '''num : CHAR WORD'''
+def p_exp_charOnly(p):
+    '''exp : CHAR WORD'''
 
     if len(p[2]) > 1:
         print("SyntaxError - CHAR applied to more than one character.")
@@ -387,6 +427,11 @@ def p_num_char(p):
     p[0] = 'pushs "' + p[2] + '"\n'
     p[0] += 'CHRCODE\n'
 
+    if parser.funDef == False:
+        parser.i += 1
+    else:
+        parser.funCount +=1
+
 
 def p_exp_printOnly(p):
     '''exp : PRINTDELIM
@@ -394,45 +439,38 @@ def p_exp_printOnly(p):
            | SPACE
            | KEY'''
     if p[1] == 'CR':
-        p[0] = 'writeln'
+        p[0] = 'writeln\n'
     elif p[1] == 'SPACE':
         p[0] = 'pushs " " \n'
     elif p[1] == 'KEY':
         p[0] = 'read\n'
         p[0] += 'chrcode\n'
-        p[0] += 'writei\n'
+        if parser.funDef == False:
+            parser.i += 1
+        else:
+            parser.funCount +=1
     else: # PRINTDELIM
         p[0] = 'pushs "' + p[1] + '"\n'
         p[0] += 'writes \n'
 
-def p_exp_print(p): # func de output print sem argumentos
-    '''exp : exp PRINTDELIM
-           | exp CR
-           | exp SPACE
-           | exp KEY'''
-    if p[1] == 'CR':
-        p[0] = 'writeln'
-    elif p[1] == 'SPACE':
-        p[0] = 'pushs " " \n'
-    elif p[1] == 'KEY':
-        p[0] = 'read\n'
-        p[0] += 'chrcode\n'
-        p[0] += 'writei\n'
-    else: # PRINTDELIM
-        p[0] = 'pushs "' + p[1] + '"\n'
-        p[0] += 'writes \n'
 
-def p_numExp_prints(p):
-    '''exp : numExp SPACES 
-           | 2numExp SPACES
-           | numExp EMIT
-           | 2numExp EMIT'''
+def p_numExp_prints(p): #TODO Verificar saldo parser.i!
+    '''exp : SPACES 
+           | EMIT'''
+    
     strt = 'l' + str(parser.labels) 
     parser.labels +=1
     fin = 'l' + str(parser.labels) 
     parser.labels +=1
+    if parser.funDef == False:
+        if parser.i <= 0:
+            print('Syntax Error on SPACES or EMIT function. Not enough arguments.\n')
+            raise SyntaxError
+        parser.i -= 1
+    else:
+        parser.funCount -=1
 
-    if p[2] == 'SPACES':
+    if p[1] == 'SPACES':
         #loop core 1
         p[0] += strt + ':\n'
         p[0] += 'dup 1\npushi 0\nsup\njz ' + fin + '\n'
@@ -442,76 +480,36 @@ def p_numExp_prints(p):
         p[0] += 'pushi 1\nsub\njump ' + strt + '\n'
         p[0] += fin + ':\n' + 'pop 1\n'
     else: # EMIT
-        p[0] += 'writechr\n'
-
-def p_exp_loop2(p):
-    '''exp : 2numExp DO exp LOOP'''
-
-    strt = 'l' + str(parser.labels) 
-    parser.labels +=1
-    fin = 'l' + str(parser.labels) 
-    parser.labels +=1
-
-    counter = str(parser.g)
-    parser.g += 1 
-    limit = str(parser.g)
-    parser.g += 1
-
-    p[0] = p[1]
-
-    p[0] += 'storeg ' + counter + ' \n'
-    p[0] += 'storeg ' + limit + ' \n'
-
-    p[0] += strt + ':\n'
-    p[0] += p[3]
-
-    p[0] += 'pushg ' + counter + '\n'
-    p[0] += 'pushi 1\n'
-    p[0] += 'sub\n'
-    p[0] += 'storeg ' + counter + '\n'
-
-    p[0] += 'pushg ' + counter + '\n'
-    p[0] += 'pushg ' + limit + '\n'
-    p[0] += 'sub\n'
-    p[0] += 'jz ' + fin + '\n'
-    p[0] += 'jump ' + strt + '\n'
-    p[0] += fin + ':\n'
-    p[0] += 'pop 1\n'
-
-
+        p[0] = 'writechr\n'
+    
 
 def p_num_number(p):
     '''num : NUMBER'''
     p[0] = 'pushi ' + p[1] + '\n'
-
-
-def p_2numExp(p):
-    '''2numExp : numExp num'''
-    p[0] = p[1] + p[2]
-
-
+    if parser.funDef == False:
+        parser.i += 1
+    else:
+        parser.funCount +=1
 
 def p_numExp_nums(p):
-    '''numExp : num
-              | cond
-              | exp num'''
-    if len(p) == 2:
-        p[0] = p[1]
-    else:
-        p[0] = p[1] + p[2]
+    '''exp : num'''
+    p[0] = p[1]
 
-def p_exp_function(p): # TODO Pode dar erro (ambiguidade)
-    '''exp : exp WORD
-           | WORD'''
-    if p[1] not in parser.enderecos:
-        print("Syntax Error - Function '" + p[1] + "' not defined.")
-        raise SyntaxError
-    
-    if len(p) == 3:
-        p[0] = p[1]
-        p[0] += 'call ' + str(parser.enderecos[p[2]][0]) + '\n' #TODO Verificar se está a buscar a label corretamente
+def p_exp_pop(p):
+    '''exp : POPPRINT'''
+    p[0] = 'writei\n'
+    if parser.funDef == False:
+        if parser.i <= 0:
+            print('Index Error on pop. Not enough arguments.\n')
+            raise IndexError 
+
+        parser.i -= 1
     else:
-        p[0] = 'call ' + str(parser.enderecos[p[2]][0]) + '\n' #TODO Verificar
+        parser.funCount -=1
+
+def p_exp_swapOnly(p):
+    '''exp : SWAP'''
+    p[0] = 'swap\n'
 
 def p_empty(p):
     'empty :'
@@ -526,10 +524,12 @@ def p_error(p):
 
 parser = yacc.yacc()
 
-parser.enderecos = {} # key: WORD; label, número argumentos 
+parser.enderecos = {} # key: WORD; body, saldoInteiros 
 parser.labels = 1
-parser.g = 0
+parser.i = 0
+parser.funDef = False
 parser.func = ""
+parser.funCount = 0
 
 # print results from yacc
 res = 'START\n'
