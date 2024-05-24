@@ -119,7 +119,7 @@ def t_funOutState_FUNOUT(t):
 
 def t_INITIAL_conditionalState_PRINTDELIM(t): 
     r'\."\s[^"]+"'
-    t.value = t.value[3:-2]
+    t.value = t.value[3:-1]
     return t
 
 def t_INITIAL_conditionalState_POPPRINT(t): 
@@ -196,6 +196,7 @@ lexer = lex.lex(#debug=True
 with open('input.txt', 'r') as file:
     forth = file.read()
  
+
 
 
 lexer.input(forth)
